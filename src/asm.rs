@@ -93,6 +93,9 @@ enum Token {
     #[regex(r"shoot_aim")]
     MnemonicShootAim,
 
+    #[regex(r"change_music")]
+    MnemonicChangeMusic,
+
     #[regex(r"[A-Za-z_][[:word:]]*:", |lex| lex.slice()[0..lex.slice().len()-1].to_owned())]
     LabelDefinition(String),
 
@@ -363,6 +366,12 @@ fn parse_line(
             let unused = expect_nibble(lineno, lex)?;
             expect_end(lineno, lex)?;
             add_stmt!(Op::new_shoot_aim(unused));
+        }
+
+        Some(Token::MnemonicChangeMusic) => {
+            let music = expect_nibble(lineno, lex)?;
+            expect_end(lineno, lex)?;
+            add_stmt!(Op::new_change_music(music));
         }
 
         _ => {

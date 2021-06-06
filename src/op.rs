@@ -43,6 +43,8 @@ pub enum Op {
 
     // オペコード 0xC0..=0xCF は全て同じ機能と思われる。
     ShootAim(u8),
+
+    ChangeMusic(u8),
 }
 
 impl Op {
@@ -137,6 +139,11 @@ impl Op {
         Self::ShootAim(unused)
     }
 
+    pub fn new_change_music(music: u8) -> Self {
+        assert!((0..=0xF).contains(&music));
+        Self::ChangeMusic(music)
+    }
+
     pub fn len(self) -> usize {
         match self {
             Self::Move(..) => 1,
@@ -160,6 +167,7 @@ impl Op {
             Self::BccY(..) => 2,
             Self::BcsY(..) => 2,
             Self::ShootAim(..) => 1,
+            Self::ChangeMusic(..) => 1,
         }
     }
 
@@ -254,6 +262,7 @@ impl Op {
                 Ok(Self::new_bcs_y(addr))
             }
             0xC0..=0xCF => Ok(Self::new_shoot_aim(opcode & 0xF)),
+            0xF0..=0xFF => Ok(Self::new_change_music(opcode & 0xF)),
             _ => Err(DecodeError::Undefined { opcode }),
         }
     }
@@ -314,6 +323,7 @@ impl Op {
                 buf[1] = addr;
             }
             Self::ShootAim(unused) => buf[0] = 0xC0 | unused,
+            Self::ChangeMusic(music) => buf[0] = 0xF0 | music,
         }
     }
 }
