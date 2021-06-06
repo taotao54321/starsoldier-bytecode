@@ -100,7 +100,7 @@ pub fn disasm<W: Write>(mut wtr: W, buf: &[u8]) -> DisasmResult<()> {
             Op::BcsX(addr) => writeln!(wtr, "bcs_x {}", labels.get(&usize::from(addr)).unwrap())?,
             Op::BccY(addr) => writeln!(wtr, "bcc_y {}", labels.get(&usize::from(addr)).unwrap())?,
             Op::BcsY(addr) => writeln!(wtr, "bcs_y {}", labels.get(&usize::from(addr)).unwrap())?,
-            Op::ShootAim => writeln!(wtr, "shoot_aim")?,
+            Op::ShootAim(unused) => writeln!(wtr, "shoot_aim {}", unused)?,
         }
     }
 

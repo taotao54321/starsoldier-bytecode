@@ -40,7 +40,9 @@ pub enum Op {
     BcsX(u8),
     BccY(u8),
     BcsY(u8),
-    ShootAim,
+
+    // オペコード 0xC0..=0xCF は全て同じ機能と思われる。
+    ShootAim(u8),
 }
 
 impl Op {
@@ -130,8 +132,9 @@ impl Op {
         Self::BcsY(addr)
     }
 
-    pub fn new_shoot_aim() -> Self {
-        Self::ShootAim
+    pub fn new_shoot_aim(unused: u8) -> Self {
+        assert!((0..=0xF).contains(&unused));
+        Self::ShootAim(unused)
     }
 
     pub fn len(self) -> usize {
@@ -156,7 +159,7 @@ impl Op {
             Self::BcsX(..) => 2,
             Self::BccY(..) => 2,
             Self::BcsY(..) => 2,
-            Self::ShootAim => 1,
+            Self::ShootAim(..) => 1,
         }
     }
 
@@ -192,12 +195,12 @@ impl Op {
                 let addr = buf[1];
                 Ok(Self::new_jump(addr))
             }
-            0x41..=0x4F => Ok(Self::new_set_sleep_timer(opcode & 0x0F)),
-            0x50 | 0x52..=0x5F => Ok(Self::new_loop_begin(opcode & 0x0F)),
+            0x41..=0x4F => Ok(Self::new_set_sleep_timer(opcode & 0xF)),
+            0x50 | 0x52..=0x5F => Ok(Self::new_loop_begin(opcode & 0xF)),
             0x51 => Ok(Self::new_loop_end()),
-            0x60..=0x6F => Ok(Self::new_shoot_direction(Direction::new(opcode & 0x0F))),
-            0x70..=0x7F => Ok(Self::new_set_sprite(opcode & 0x0F)),
-            0x80..=0x8F => Ok(Self::new_set_homing_timer(opcode & 0x0F)),
+            0x60..=0x6F => Ok(Self::new_shoot_direction(Direction::new(opcode & 0xF))),
+            0x70..=0x7F => Ok(Self::new_set_sprite(opcode & 0xF)),
+            0x80..=0x8F => Ok(Self::new_set_homing_timer(opcode & 0xF)),
             0x90..=0x93 => Ok(Self::new_set_inversion(
                 (opcode & 1) != 0,
                 (opcode & 2) != 0,
@@ -250,7 +253,7 @@ impl Op {
                 let addr = buf[1];
                 Ok(Self::new_bcs_y(addr))
             }
-            0xC0 => Ok(Self::new_shoot_aim()),
+            0xC0..=0xCF => Ok(Self::new_shoot_aim(opcode & 0xF)),
             _ => Err(DecodeError::Undefined { opcode }),
         }
     }
@@ -310,7 +313,7 @@ impl Op {
                 buf[0] = 0xB3;
                 buf[1] = addr;
             }
-            Self::ShootAim => buf[0] = 0xC0,
+            Self::ShootAim(unused) => buf[0] = 0xC0 | unused,
         }
     }
 }

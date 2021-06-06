@@ -360,8 +360,9 @@ fn parse_line(
         }
 
         Some(Token::MnemonicShootAim) => {
+            let unused = expect_nibble(lineno, lex)?;
             expect_end(lineno, lex)?;
-            add_stmt!(Op::new_shoot_aim());
+            add_stmt!(Op::new_shoot_aim(unused));
         }
 
         _ => {
