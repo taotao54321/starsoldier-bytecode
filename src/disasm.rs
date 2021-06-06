@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 
 use thiserror::Error;
@@ -31,33 +31,40 @@ pub fn disasm<W: Write>(mut wtr: W, buf: &[u8]) -> DisasmResult<()> {
     }
 
     let mut stmts = vec![];
-    let mut labels = HashMap::new();
+    let mut addrs_opcode = HashSet::new();
+    let mut addr_to_label = HashMap::new();
 
     let mut addr = 0;
     while !buf[addr..].is_empty() {
-        let op = Op::decode(&buf[addr..]).map_err(|e| DisasmError::Decode { addr, source: e })?;
+        let mut op =
+            Op::decode(&buf[addr..]).map_err(|e| DisasmError::Decode { addr, source: e })?;
 
         // ジャンプ命令などの場合、飛び先をラベルを振るべきアドレスとして記録。
         //
-        // SetJumpOnDamage の場合、オペランドがバッファ内オフセットとして正しければ無条件でラベルを
-        // 振り、さもなくばボスのHP設定とみなして無視する。
-        // これだとボスの場合に余計なラベルが発生しうるが、それは許容する。
+        // SetJumpOnDamage の場合、実際は SetHealth の可能性がある。
+        // オペランドがバッファ内オフセットとして正しければとりあえず前者として扱い、ラベルを振る。
+        // さもなくば SetHealth として扱う。
+        //
+        // UnsetJumpOnDamage も実際は SetHealth の可能性があるが、ここでは判別できないのでそのままにする。
         if let Some(addr_dst) = op.addr_destination() {
             if (0..buf.len()).contains(&usize::from(addr_dst)) {
-                labels.insert(usize::from(addr_dst), format!("L{:02X}", addr_dst));
+                addr_to_label.insert(usize::from(addr_dst), format!("L{:02X}", addr_dst));
             } else {
-                if !matches!(op, Op::SetJumpOnDamage(_)) {
+                if matches!(op, Op::SetJumpOnDamage(_)) {
+                    op = Op::SetHealth(addr_dst);
+                } else {
                     return Err(DisasmError::InvalidDestination { addr, addr_dst });
                 }
             }
         }
 
+        addrs_opcode.insert(addr);
         stmts.push(Statement { addr, op });
         addr += op.len();
     }
 
     for stmt in stmts {
-        if let Some(label) = labels.get(&stmt.addr) {
+        if let Some(label) = addr_to_label.get(&stmt.addr) {
             writeln!(wtr, "{}:", label)?;
         }
 
@@ -66,7 +73,11 @@ pub fn disasm<W: Write>(mut wtr: W, buf: &[u8]) -> DisasmResult<()> {
 
         match stmt.op {
             Op::Move(dir) => writeln!(wtr, "move {:#04X}", dir.index())?,
-            Op::Jump(addr) => writeln!(wtr, "jump {}", labels.get(&usize::from(addr)).unwrap())?,
+            Op::Jump(addr) => writeln!(
+                wtr,
+                "jump {}",
+                addr_to_label.get(&usize::from(addr)).unwrap()
+            )?,
             Op::SetSleepTimer(idx) => writeln!(wtr, "set_sleep_timer {}", idx)?,
             Op::LoopBegin(idx) => writeln!(wtr, "loop_begin {}", idx)?,
             Op::LoopEnd => writeln!(wtr, "loop_end")?,
@@ -80,26 +91,48 @@ pub fn disasm<W: Write>(mut wtr: W, buf: &[u8]) -> DisasmResult<()> {
                 u8::from(inv_y)
             )?,
             Op::SetPosition(x, y) => writeln!(wtr, "set_position {}, {}", x, y)?,
+
+            // SetJumpOnDamage の場合、実際は SetHealth である可能性がある。
+            // オペランドのアドレスが命令境界でない場合、SetHealth とみなす。
             Op::SetJumpOnDamage(addr) => {
-                if (0..buf.len()).contains(&usize::from(addr)) {
+                if addrs_opcode.contains(&usize::from(addr)) {
                     writeln!(
                         wtr,
                         "set_jump_on_damage {}",
-                        labels.get(&usize::from(addr)).unwrap()
+                        addr_to_label.get(&usize::from(addr)).unwrap()
                     )?;
                 } else {
                     writeln!(wtr, "set_health {}", addr)?;
                 }
             }
+
+            Op::UnsetJumpOnDamage => writeln!(wtr, "unset_jump_on_damage")?,
+            Op::SetHealth(health) => writeln!(wtr, "set_health {}", health)?,
             Op::IncrementSprite => writeln!(wtr, "increment_sprite")?,
             Op::DecrementSprite => writeln!(wtr, "decrement_sprite")?,
             Op::SetPart(part) => writeln!(wtr, "set_part {}", part)?,
             Op::RandomizeX(mask) => writeln!(wtr, "randomize_x {:#04X}", mask)?,
             Op::RandomizeY(mask) => writeln!(wtr, "randomize_y {:#04X}", mask)?,
-            Op::BccX(addr) => writeln!(wtr, "bcc_x {}", labels.get(&usize::from(addr)).unwrap())?,
-            Op::BcsX(addr) => writeln!(wtr, "bcs_x {}", labels.get(&usize::from(addr)).unwrap())?,
-            Op::BccY(addr) => writeln!(wtr, "bcc_y {}", labels.get(&usize::from(addr)).unwrap())?,
-            Op::BcsY(addr) => writeln!(wtr, "bcs_y {}", labels.get(&usize::from(addr)).unwrap())?,
+            Op::BccX(addr) => writeln!(
+                wtr,
+                "bcc_x {}",
+                addr_to_label.get(&usize::from(addr)).unwrap()
+            )?,
+            Op::BcsX(addr) => writeln!(
+                wtr,
+                "bcs_x {}",
+                addr_to_label.get(&usize::from(addr)).unwrap()
+            )?,
+            Op::BccY(addr) => writeln!(
+                wtr,
+                "bcc_y {}",
+                addr_to_label.get(&usize::from(addr)).unwrap()
+            )?,
+            Op::BcsY(addr) => writeln!(
+                wtr,
+                "bcs_y {}",
+                addr_to_label.get(&usize::from(addr)).unwrap()
+            )?,
             Op::ShootAim(unused) => writeln!(wtr, "shoot_aim {}", unused)?,
             Op::ChangeMusic(music) => writeln!(wtr, "change_music {}", music)?,
         }

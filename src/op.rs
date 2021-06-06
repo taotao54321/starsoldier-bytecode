@@ -26,10 +26,12 @@ pub enum Op {
     SetInversion(bool, bool),
     SetPosition(u8, u8),
 
-    // ザコの場合、被弾時のジャンプ先を設定する。
-    // ボスの場合、HP を設定する。
-    // バリアントを分けるとバイナリを見ただけでは逆アセンブルできなくなるので分けない。
+    // これらは全てオペコード 0xA1。
+    // ザコの場合、(0xA1, 0x01..=0xFF) で被弾時のジャンプ先を設定し、(0xA1, 0x00) で設定解除。
+    // ボスの場合、(0xA1, 0x00..=0xFF) でHPを設定。
     SetJumpOnDamage(u8),
+    UnsetJumpOnDamage,
+    SetHealth(u8),
 
     IncrementSprite,
     DecrementSprite,
@@ -95,7 +97,16 @@ impl Op {
     }
 
     pub fn new_set_jump_on_damage(addr: u8) -> Self {
+        assert_ne!(addr, 0);
         Self::SetJumpOnDamage(addr)
+    }
+
+    pub fn new_unset_jump_on_damage() -> Self {
+        Self::UnsetJumpOnDamage
+    }
+
+    pub fn new_set_health(health: u8) -> Self {
+        Self::SetHealth(health)
     }
 
     pub fn new_increment_sprite() -> Self {
@@ -157,6 +168,8 @@ impl Op {
             Self::SetInversion(..) => 1,
             Self::SetPosition(..) => 3,
             Self::SetJumpOnDamage(..) => 2,
+            Self::UnsetJumpOnDamage => 2,
+            Self::SetHealth(..) => 2,
             Self::IncrementSprite => 1,
             Self::DecrementSprite => 1,
             Self::SetPart(..) => 2,
@@ -219,11 +232,19 @@ impl Op {
                 let y = buf[2];
                 Ok(Self::new_set_position(x, y))
             }
+
+            // バイナリを見ただけでは set_jump_on_damage, set_health のどちらなのか判別できない。
+            // とりあえず前者だと仮定し、判別はクライアント側に任せる。
             0xA1 => {
                 ensure_buf_len!(2);
                 let addr = buf[1];
-                Ok(Self::new_set_jump_on_damage(addr))
+                if addr == 0 {
+                    Ok(Self::new_unset_jump_on_damage())
+                } else {
+                    Ok(Self::new_set_jump_on_damage(addr))
+                }
             }
+
             0xA2 => Ok(Self::new_increment_sprite()),
             0xA3 => Ok(Self::new_decrement_sprite()),
             0xA4 => {
@@ -291,6 +312,14 @@ impl Op {
             Self::SetJumpOnDamage(addr) => {
                 buf[0] = 0xA1;
                 buf[1] = addr;
+            }
+            Self::UnsetJumpOnDamage => {
+                buf[0] = 0xA1;
+                buf[1] = 0;
+            }
+            Self::SetHealth(health) => {
+                buf[0] = 0xA1;
+                buf[1] = health;
             }
             Self::IncrementSprite => buf[0] = 0xA2,
             Self::DecrementSprite => buf[0] = 0xA3,

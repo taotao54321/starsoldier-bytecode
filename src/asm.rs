@@ -18,6 +18,9 @@ pub enum AsmError {
     #[error("line {lineno}: undefined label: {label}")]
     UndefinedLabel { lineno: usize, label: String },
 
+    #[error("line {lineno}: set_jump_on_damage 0 is not permitted")]
+    SetJumpOnDamageZero { lineno: usize },
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -58,6 +61,9 @@ enum Token {
 
     #[regex(r"set_jump_on_damage")]
     MnemonicSetJumpOnDamage,
+
+    #[regex(r"unset_jump_on_damage")]
+    MnemonicUnsetJumpOnDamage,
 
     // バイトコードは set_jump_on_damage と同一。
     #[regex(r"set_health")]
@@ -146,7 +152,7 @@ impl Statement {
 
 pub fn asm<R: BufRead>(rdr: R) -> AsmResult<Vec<u8>> {
     let mut stmts = vec![];
-    let mut labels = HashMap::new();
+    let mut label_to_addr = HashMap::new();
 
     let mut addr = 0;
     for (i, line) in rdr.lines().enumerate() {
@@ -157,13 +163,13 @@ pub fn asm<R: BufRead>(rdr: R) -> AsmResult<Vec<u8>> {
             continue;
         }
 
-        parse_line(lineno, line, &mut addr, &mut stmts, &mut labels)?;
+        parse_line(lineno, line, &mut addr, &mut stmts, &mut label_to_addr)?;
         if addr > 0x100 {
             return Err(AsmError::Overflow { lineno });
         }
     }
 
-    resolve_labels(&mut stmts, &labels)?;
+    resolve_labels(&mut stmts, &label_to_addr)?;
 
     let mut buf = vec![0_u8; addr];
     emit_code(&mut buf, &stmts);
@@ -179,16 +185,25 @@ fn emit_code(buf: &mut [u8], stmts: &[Statement]) {
     }
 }
 
-fn resolve_labels(stmts: &mut [Statement], labels: &HashMap<String, u8>) -> AsmResult<()> {
+fn resolve_labels(stmts: &mut [Statement], label_to_addr: &HashMap<String, u8>) -> AsmResult<()> {
     for stmt in stmts {
         if let Some(label) = stmt.label.take() {
-            let addr = *labels.get(&label).ok_or_else(|| AsmError::UndefinedLabel {
-                lineno: stmt.lineno,
-                label,
-            })?;
+            let addr = *label_to_addr
+                .get(&label)
+                .ok_or_else(|| AsmError::UndefinedLabel {
+                    lineno: stmt.lineno,
+                    label,
+                })?;
             stmt.op = match stmt.op {
                 Op::Jump(_) => Op::Jump(addr),
-                Op::SetJumpOnDamage(_) => Op::SetJumpOnDamage(addr),
+                Op::SetJumpOnDamage(_) => {
+                    if addr == 0 {
+                        return Err(AsmError::SetJumpOnDamageZero {
+                            lineno: stmt.lineno,
+                        });
+                    }
+                    Op::SetJumpOnDamage(addr)
+                }
                 Op::BccX(_) => Op::BccX(addr),
                 Op::BcsX(_) => Op::BcsX(addr),
                 Op::BccY(_) => Op::BccY(addr),
@@ -301,7 +316,12 @@ fn parse_line(
         Some(Token::MnemonicSetJumpOnDamage) => {
             let label = expect_label_reference(lineno, lex)?;
             expect_end(lineno, lex)?;
-            add_stmt_with_label!(Op::new_set_jump_on_damage(0), label);
+            add_stmt_with_label!(Op::new_set_jump_on_damage(0xFF), label);
+        }
+
+        Some(Token::MnemonicUnsetJumpOnDamage) => {
+            expect_end(lineno, lex)?;
+            add_stmt!(Op::new_unset_jump_on_damage());
         }
 
         Some(Token::MnemonicSetHealth) => {
