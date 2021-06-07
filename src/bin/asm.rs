@@ -14,8 +14,7 @@ struct Opt {
 fn main() -> eyre::Result<()> {
     let opt = Opt::from_args();
 
-    let rdr = std::io::BufReader::new(std::fs::File::open(opt.path_in)?);
-    let buf = bytecode::asm(rdr)?;
+    let buf = bytecode::asm(std::fs::read(opt.path_in)?.as_slice())?;
 
     std::fs::write(opt.path_out, buf)?;
 

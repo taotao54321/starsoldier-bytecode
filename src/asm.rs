@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io::BufRead;
 
 use logos::{Lexer, Logos};
 use thiserror::Error;
@@ -153,7 +152,11 @@ impl Statement {
     }
 }
 
-pub fn asm<R: BufRead>(rdr: R) -> AsmResult<Vec<u8>> {
+pub fn asm<R: std::io::Read>(rdr: R) -> AsmResult<Vec<u8>> {
+    use std::io::BufRead as _;
+
+    let rdr = std::io::BufReader::new(rdr);
+
     let mut stmts = vec![];
     let mut label_to_addr = HashMap::new();
 
