@@ -9,3 +9,6 @@ eyre = "0.6.5"
 logos = "0.12.0"
 structopt = "0.3.21"
 thiserror = "1.0.25"
+
+[dev-dependencies]
+macroquad = "0.3.5"

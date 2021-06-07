@@ -299,6 +299,22 @@ impl Interpreter {
         }
     }
 
+    pub fn state(&self) -> EnemyState {
+        self.state
+    }
+
+    pub fn x(&self) -> u8 {
+        self.x
+    }
+
+    pub fn y(&self) -> u8 {
+        self.y
+    }
+
+    pub fn sprite_index(&self) -> u8 {
+        self.sprite_idx
+    }
+
     fn fetch(&mut self) -> InterpretResult<Op> {
         let mut op = Op::decode(&self.program[self.pc..]).map_err(|e| InterpretError::Decode {
             addr: self.pc,
