@@ -99,8 +99,11 @@ enum Token {
     #[regex(r"shoot_aim")]
     MnemonicShootAim,
 
-    #[regex(r"change_music")]
-    MnemonicChangeMusic,
+    #[regex(r"restore_music")]
+    MnemonicRestoreMusic,
+
+    #[regex(r"play_sound")]
+    MnemonicPlaySound,
 
     #[regex(r"[A-Za-z_][[:word:]]*:", |lex| lex.slice()[0..lex.slice().len()-1].to_owned())]
     LabelDefinition(String),
@@ -388,10 +391,15 @@ fn parse_line(
             add_stmt!(Op::new_shoot_aim(unused));
         }
 
-        Some(Token::MnemonicChangeMusic) => {
-            let music = expect_nibble(lineno, lex)?;
+        Some(Token::MnemonicRestoreMusic) => {
             expect_end(lineno, lex)?;
-            add_stmt!(Op::new_change_music(music));
+            add_stmt!(Op::new_restore_music());
+        }
+
+        Some(Token::MnemonicPlaySound) => {
+            let sound = expect_sound(lineno, lex)?;
+            expect_end(lineno, lex)?;
+            add_stmt!(Op::new_play_sound(sound));
         }
 
         _ => {
@@ -468,6 +476,21 @@ fn expect_loop_idx(lineno: usize, lex: &mut Lexer<Token>) -> AsmResult<u8> {
     }
 
     Ok(idx)
+}
+
+fn expect_sound(lineno: usize, lex: &mut Lexer<Token>) -> AsmResult<u8> {
+    const RANGE: std::ops::RangeInclusive<u8> = 1..=0xF;
+
+    let sound = expect_number(lineno, lex)?;
+
+    if !RANGE.contains(&sound) {
+        return Err(AsmError::Parse {
+            lineno,
+            msg: format!("sound must be within {:?}: {}", RANGE, sound),
+        });
+    }
+
+    Ok(sound)
 }
 
 fn expect_bool(lineno: usize, lex: &mut Lexer<Token>) -> AsmResult<bool> {

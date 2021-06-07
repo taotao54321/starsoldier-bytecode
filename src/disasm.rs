@@ -134,7 +134,8 @@ pub fn disasm<W: Write>(mut wtr: W, buf: &[u8]) -> DisasmResult<()> {
                 addr_to_label.get(&usize::from(addr)).unwrap()
             )?,
             Op::ShootAim(unused) => writeln!(wtr, "shoot_aim {}", unused)?,
-            Op::ChangeMusic(music) => writeln!(wtr, "change_music {}", music)?,
+            Op::RestoreMusic => writeln!(wtr, "restore_music")?,
+            Op::PlaySound(sound) => writeln!(wtr, "play_sound {}", sound)?,
         }
     }
 

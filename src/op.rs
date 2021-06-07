@@ -46,7 +46,8 @@ pub enum Op {
     // オペコード 0xC0..=0xCF は全て同じ機能と思われる。
     ShootAim(u8),
 
-    ChangeMusic(u8),
+    RestoreMusic,
+    PlaySound(u8),
 }
 
 impl Op {
@@ -150,9 +151,13 @@ impl Op {
         Self::ShootAim(unused)
     }
 
-    pub fn new_change_music(music: u8) -> Self {
-        assert!((0..=0xF).contains(&music));
-        Self::ChangeMusic(music)
+    pub fn new_restore_music() -> Self {
+        Self::RestoreMusic
+    }
+
+    pub fn new_play_sound(sound: u8) -> Self {
+        assert!((1..=0xF).contains(&sound));
+        Self::PlaySound(sound)
     }
 
     pub fn len(self) -> usize {
@@ -180,7 +185,8 @@ impl Op {
             Self::BccY(..) => 2,
             Self::BcsY(..) => 2,
             Self::ShootAim(..) => 1,
-            Self::ChangeMusic(..) => 1,
+            Self::RestoreMusic => 1,
+            Self::PlaySound(..) => 1,
         }
     }
 
@@ -283,7 +289,8 @@ impl Op {
                 Ok(Self::new_bcs_y(addr))
             }
             0xC0..=0xCF => Ok(Self::new_shoot_aim(opcode & 0xF)),
-            0xF0..=0xFF => Ok(Self::new_change_music(opcode & 0xF)),
+            0xF0 => Ok(Self::new_restore_music()),
+            0xF1..=0xFF => Ok(Self::new_play_sound(opcode & 0xF)),
             _ => Err(DecodeError::Undefined { opcode }),
         }
     }
@@ -352,7 +359,8 @@ impl Op {
                 buf[1] = addr;
             }
             Self::ShootAim(unused) => buf[0] = 0xC0 | unused,
-            Self::ChangeMusic(music) => buf[0] = 0xF0 | music,
+            Self::RestoreMusic => buf[0] = 0xF0,
+            Self::PlaySound(sound) => buf[0] = 0xF0 | sound,
         }
     }
 }
